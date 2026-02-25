@@ -8,8 +8,11 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN or not BOT_TOKEN.strip():
     raise ValueError("BOT_TOKEN is required. Set it in .env")
-
 BOT_TOKEN = BOT_TOKEN.strip()
+
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "").strip()
+if not WEBHOOK_URL:
+    raise ValueError("WEBHOOK_URL is required for webhook mode (e.g. https://your-app.onrender.com/webhook)")
 
 ADMIN_IDS = [6013044386]
 
