@@ -350,3 +350,110 @@ async def get_closed_trades_by_token(user_id: int, token_symbol: str) -> list[Tr
     )
     rows = await cursor.fetchall()
     return [Trade.from_row(tuple(r)) for r in rows]
+
+
+async def get_analytics_user_activity() -> dict:
+    """Total users, active 1D/7D/30D from trades. Times in UTC."""
+    from datetime import datetime, timedelta
+    db = await get_db()
+    now = datetime.utcnow()
+    since_1d = (now - timedelta(days=1)).isoformat()
+    since_7d = (now - timedelta(days=7)).isoformat()
+    since_30d = (now - timedelta(days=30)).isoformat()
+    cursor = await db.execute(
+        "SELECT COUNT(DISTINCT user_id) FROM trades"
+    )
+    total = (await cursor.fetchone())[0]
+    cursor = await db.execute(
+        """SELECT COUNT(DISTINCT user_id) FROM trades
+           WHERE open_time >= ? OR close_time >= ?""",
+        (since_1d, since_1d),
+    )
+    active_1d = (await cursor.fetchone())[0]
+    cursor = await db.execute(
+        """SELECT COUNT(DISTINCT user_id) FROM trades
+           WHERE open_time >= ? OR close_time >= ?""",
+        (since_7d, since_7d),
+    )
+    active_7d = (await cursor.fetchone())[0]
+    cursor = await db.execute(
+        """SELECT COUNT(DISTINCT user_id) FROM trades
+           WHERE open_time >= ? OR close_time >= ?""",
+        (since_30d, since_30d),
+    )
+    active_30d = (await cursor.fetchone())[0]
+    return {"total_users": total, "active_1d": active_1d, "active_7d": active_7d, "active_30d": active_30d}
+
+
+async def get_analytics_trade_stats() -> dict:
+    """Total valid, closed, open, invalid %, avg duration."""
+    db = await get_db()
+    cursor = await db.execute("SELECT COUNT(*) FROM trades WHERE status = 'valid'")
+    valid = (await cursor.fetchone())[0]
+    cursor = await db.execute(
+        "SELECT COUNT(*) FROM trades WHERE status = 'valid' AND close_time IS NOT NULL"
+    )
+    closed = (await cursor.fetchone())[0]
+    cursor = await db.execute(
+        "SELECT COUNT(*) FROM trades WHERE close_time IS NULL"
+    )
+    open_count = (await cursor.fetchone())[0]
+    cursor = await db.execute("SELECT COUNT(*) FROM trades")
+    total = (await cursor.fetchone())[0]
+    invalid_pct = (100.0 * (total - valid) / total) if total else 0.0
+    cursor = await db.execute(
+        "SELECT AVG(duration) FROM trades WHERE status = 'valid' AND close_time IS NOT NULL AND duration IS NOT NULL"
+    )
+    row = await cursor.fetchone()
+    avg_duration = row[0] if row and row[0] is not None else 0
+    return {
+        "total_valid": valid,
+        "closed": closed,
+        "open": open_count,
+        "invalid_pct": invalid_pct,
+        "avg_duration_min": round(avg_duration, 1) if avg_duration else 0,
+    }
+
+
+async def get_analytics_psychology_stats() -> dict:
+    """Emotion open/close fill rate, most used emotion, worst emotion by avg pnl."""
+    db = await get_db()
+    cursor = await db.execute(
+        """SELECT COUNT(*), SUM(CASE WHEN emotion_open IS NOT NULL AND emotion_open != '' THEN 1 ELSE 0 END)
+           FROM trades WHERE status = 'valid' AND close_time IS NOT NULL"""
+    )
+    row = await cursor.fetchone()
+    total_closed = row[0] or 0
+    filled_open = row[1] or 0
+    emotion_open_rate = (100.0 * filled_open / total_closed) if total_closed else 0
+    cursor = await db.execute(
+        """SELECT COUNT(*), SUM(CASE WHEN emotion_close IS NOT NULL AND emotion_close != '' THEN 1 ELSE 0 END)
+           FROM trades WHERE status = 'valid' AND close_time IS NOT NULL"""
+    )
+    row = await cursor.fetchone()
+    filled_close = row[1] or 0
+    emotion_close_rate = (100.0 * filled_close / total_closed) if total_closed else 0
+    cursor = await db.execute(
+        """SELECT emotion_open, COUNT(*) as c FROM trades
+           WHERE status = 'valid' AND emotion_open IS NOT NULL AND emotion_open != ''
+           GROUP BY emotion_open ORDER BY c DESC LIMIT 1"""
+    )
+    row = await cursor.fetchone()
+    most_used = row[0] if row else "—"
+    cursor = await db.execute(
+        """SELECT emotion_open,
+           AVG(CASE WHEN open_price > 0 THEN 100.0 * (close_price - open_price) / open_price ELSE 0 END) as avg_pnl
+           FROM trades WHERE status = 'valid' AND close_time IS NOT NULL AND open_price IS NOT NULL AND close_price IS NOT NULL
+           AND emotion_open IS NOT NULL AND emotion_open != ''
+           GROUP BY emotion_open ORDER BY avg_pnl ASC LIMIT 1"""
+    )
+    row = await cursor.fetchone()
+    worst_emotion = row[0] if row else "—"
+    worst_avg_pnl = round(row[1], 1) if row and row[1] is not None else "—"
+    return {
+        "emotion_open_rate": round(emotion_open_rate, 1),
+        "emotion_close_rate": round(emotion_close_rate, 1),
+        "most_used_emotion": most_used,
+        "worst_emotion": worst_emotion,
+        "worst_avg_pnl": worst_avg_pnl,
+    }

@@ -43,15 +43,23 @@ def kb_main_menu_reply(user_id: int | None = None) -> ReplyKeyboardMarkup:
 
 
 def kb_admin_panel() -> InlineKeyboardMarkup:
-    """Admin Panel: maintenance, Feedback Viewer, Export Trades CSV, Back to Menu."""
+    """Admin Panel: Maintenance, Track Behaviour, Admin Feedback, Back to Menu."""
+    b = InlineKeyboardBuilder()
+    b.row(InlineKeyboardButton(text="🛠 Maintenance", callback_data="admin_maintenance_menu"))
+    b.row(InlineKeyboardButton(text="📊 Track Behaviour", callback_data="admin_track_behaviour"))
+    b.row(InlineKeyboardButton(text="📨 Admin Feedback", callback_data="admin_feedback_viewer"))
+    b.row(InlineKeyboardButton(text="🔙 Back to Menu", callback_data=BACK_TO_MENU_DATA))
+    return b.as_markup()
+
+
+def kb_admin_maintenance() -> InlineKeyboardMarkup:
+    """Maintenance sub-menu: Turn Bot ON, Turn Maintenance ON, Back to Admin."""
     b = InlineKeyboardBuilder()
     b.row(
         InlineKeyboardButton(text="🟢 Turn Bot ON", callback_data="admin_maintenance_off"),
         InlineKeyboardButton(text="🔴 Turn Maintenance ON", callback_data="admin_maintenance_on"),
     )
-    b.row(InlineKeyboardButton(text="📩 Feedback Viewer", callback_data="admin_feedback_viewer"))
-    b.row(InlineKeyboardButton(text="📊 Export Trades CSV", callback_data="admin_export_trades"))
-    b.row(InlineKeyboardButton(text="⬅ Back to Menu", callback_data=BACK_TO_MENU_DATA))
+    b.row(InlineKeyboardButton(text="🔙 Back to Admin", callback_data="admin_back_to_admin"))
     return b.as_markup()
 
 

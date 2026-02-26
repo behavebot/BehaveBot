@@ -65,6 +65,32 @@ async def cmd_admin_feedback(message: Message) -> None:
     await _send_feedback_list_with_previews(message.chat.id, message.bot, rows, _kb_admin_feedback())
 
 
+@router.callback_query(F.data == "admin_maintenance_menu")
+async def admin_maintenance_menu(callback: CallbackQuery) -> None:
+    if callback.from_user.id not in ADMIN_IDS:
+        await callback.answer(ADMIN_ACCESS_DENIED, show_alert=True)
+        return
+    from bot.keyboards import kb_admin_maintenance
+    await callback.answer()
+    await callback.message.edit_text(
+        "🛠 Maintenance\n\nToggle bot availability for non-admin users:",
+        reply_markup=kb_admin_maintenance(),
+    )
+
+
+@router.callback_query(F.data == "admin_back_to_admin")
+async def admin_back_to_admin(callback: CallbackQuery) -> None:
+    if callback.from_user.id not in ADMIN_IDS:
+        await callback.answer()
+        return
+    from bot.keyboards import kb_admin_panel
+    await callback.answer()
+    await callback.message.edit_text(
+        "🛠 Admin Panel\n\nChoose an action:",
+        reply_markup=kb_admin_panel(),
+    )
+
+
 @router.callback_query(F.data == "admin_maintenance_off")
 async def admin_maintenance_off(callback: CallbackQuery) -> None:
     if callback.from_user.id not in ADMIN_IDS:
