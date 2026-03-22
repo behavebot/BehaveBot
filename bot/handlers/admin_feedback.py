@@ -83,12 +83,12 @@ async def admin_back_to_admin(callback: CallbackQuery) -> None:
     if callback.from_user.id not in ADMIN_IDS:
         await callback.answer()
         return
-    from bot.keyboards import kb_admin_panel
+    from bot.keyboards import kb_admin_panel, ADMIN_PANEL_TEXT
+    from bot.database.db import get_user_premium_status_fresh
+
     await callback.answer()
-    await callback.message.edit_text(
-        "🛠 Admin Panel\n\nChoose an action:",
-        reply_markup=kb_admin_panel(),
-    )
+    st = await get_user_premium_status_fresh(callback.from_user.id)
+    await callback.message.edit_text(ADMIN_PANEL_TEXT, reply_markup=kb_admin_panel(bool(st.get("is_premium"))))
 
 
 @router.callback_query(F.data == "admin_maintenance_off")

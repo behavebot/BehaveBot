@@ -40,48 +40,63 @@ def _fsm_expects_free_text(state: str | None) -> bool:
             "OpenPositionStates:category_note",
             "ClosePositionStates:emotion_note",
             "ClosePositionStates:reason_note",
+            "ClosePositionStates:auto_emotion_note",
+            "ClosePositionStates:auto_reason_note",
             "MarkInvalidStates:reason_note",
+            "ConnectWalletStates:",  # wallet address / settings flow
         )
     )
 
 
 def _fmt_token_msg(td) -> str:
-    mcap = f"${td.mcap:,.0f}" if td.mcap else "N/A"
-    liq = f"${td.liquidity:,.0f}" if td.liquidity else "N/A"
-    vol = f"${td.volume_1h:,.0f}" if td.volume_1h else "N/A"
-    age = td.age or "N/A"
-    price = f"${td.price:.8f}" if td.price < 0.0001 else f"${td.price:.6f}"
-    network = getattr(td, "chain", None) or getattr(td, "network", None) or "N/A"
-    dex = getattr(td, "dex_name", None) or "N/A"
-    token_block = (
-        f"🪙 TOKEN SNAPSHOT\n"
-        f"🌐 Network: {network}\n"
-        f"💰 Price: {price}\n"
-        f"🏦 Market Cap: {mcap}\n"
-        f"⏳ Age: {age}\n"
-    )
-    pool_block = (
-        f"💧 POOL INFO\n"
-        f"💧 Liquidity: {liq}\n"
-        f"📊 Volume (1H): {vol}\n"
-        f"🔁 Dex: {dex}\n"
-    )
-    tax_block = (
-        f"🛡 TOKEN TAX\n"
-        f"Tax info not available\n"
-    )
-    return f"📊 {td.name} (${td.symbol})\n\n{token_block}\n{pool_block}\n{tax_block}\nDo you want to open a position?"
+    from bot.utils.formatters import get_network_icon, format_compact_number
+    sym = getattr(td, "symbol", None) or "Unknown"
+    sym_label = f"${sym}" if sym and sym != "Unknown" else sym
+    network_raw = getattr(td, "chain", None) or getattr(td, "network", None) or ""
+    network = get_network_icon(network_raw) if network_raw else "—"
+    amount = getattr(td, "open_quantity", None)
+    amount_str = f"{amount:.4g}" if amount is not None else "—"
+    price_val = getattr(td, "price", None)
+    if price_val is not None and amount is not None:
+        value_str = f"${float(amount) * float(price_val):.2f}"
+    else:
+        value_str = "—"
+    price_str = "—"
+    if price_val is not None:
+        price_str = f"${price_val:.8f}" if price_val < 0.0001 else f"${price_val:.6f}"
+    mcap = getattr(td, "mcap", None)
+    lines = [
+        "🪙 TOKEN PREVIEW",
+        "",
+        f"🪙 Token: {sym_label}",
+        f"🌐 Chain: {network}",
+        "",
+        f"📦 Amount: {amount_str}",
+        f"💰 Value: {value_str}",
+        f"🏷 Price: {price_str}",
+    ]
+    if mcap is not None:
+        lines.append(f"🏦 Market Cap: ${format_compact_number(mcap)}")
+    lines.extend(["", "Do you want to open a position?"])
+    return "\n".join(lines)
 
 
-@router.message(F.text)
+def _not_main_menu_button(message: Message) -> bool:
+    """Filter: do not match menu button texts so start_router can handle them."""
+    text = (message.text or "").strip()
+    return text not in MAIN_MENU_BUTTON_TEXTS
+
+
+@router.message(F.text, _not_main_menu_button)
 async def on_text(message: Message, state: FSMContext) -> None:
     text = (message.text or "").strip()
     if not text:
         return
     if text.startswith("/"):
         return
-    if text in MAIN_MENU_BUTTON_TEXTS:
-        return
+    current = await state.get_state()
+    if current and current.startswith("ConnectWalletStates:"):
+        return  # Let settings handler process wallet address
     if len(text) < 20:
         return
     raw = (text or "").strip()

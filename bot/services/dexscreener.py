@@ -20,6 +20,13 @@ class TokenData:
     age: Optional[str]
     chart_url: Optional[str]
     dex_name: Optional[str]
+    from_detection: bool = False
+    tx_timestamp: Optional[int] = None
+    open_quantity: Optional[float] = None
+    open_value_usd: Optional[float] = None  # set when merging ignored pendings
+    volume_24h: Optional[float] = None
+    network: Optional[str] = None
+    decimals: Optional[int] = None
 
 
 def _normalize_ca(text: str) -> Optional[str]:
@@ -43,7 +50,27 @@ def _safe_float(val, default: float = 0.0) -> float:
 async def fetch_token_data(token_address: str) -> Optional[TokenData]:
     ca = _normalize_ca(token_address)
     if not ca:
-        return None
+        ca = token_address.strip()
+        if not ca or len(ca) < 10:
+            return None
+    # Prefer cached metadata to avoid API rate limits
+    from bot.database.db import get_token_from_cache, set_token_cache
+    cached = await get_token_from_cache(ca)
+    if cached:
+        return TokenData(
+            token_address=cached["token_address"],
+            name=cached.get("token_name") or "Unknown",
+            symbol=cached.get("symbol") or "?",
+            chain=cached.get("chain") or "unknown",
+            price=float(cached["price"]) if cached.get("price") is not None else 0.0,
+            mcap=None,
+            liquidity=None,
+            volume_1h=None,
+            age=None,
+            chart_url=None,
+            dex_name=None,
+            decimals=cached.get("decimals"),
+        )
     url = f"{DEXSCREENER_BASE}/{ca}"
     try:
         async with aiohttp.ClientSession() as session:
@@ -75,12 +102,19 @@ async def fetch_token_data(token_address: str) -> Optional[TokenData]:
     if liquidity == 0:
         liquidity = _safe_float(pair.get("liquidity"))
     volume = pair.get("volume")
+    volume_24h = None
     if isinstance(volume, dict):
-        volume_1h = _safe_float(volume.get("h24"), 0.0)
+        volume_1h = _safe_float(volume.get("h1"), 0.0)
+        volume_24h = _safe_float(volume.get("h24"), 0.0) or None
     else:
         volume_1h = _safe_float(volume, 0.0)
-    fdv = pair.get("fdv")
-    mcap = _safe_float(fdv, 0.0) if fdv else None
+    # Prefer marketCap (circulating); fallback to fdv (fully diluted)
+    market_cap = pair.get("marketCap")
+    if market_cap is not None:
+        mcap = _safe_float(market_cap, 0.0)
+    else:
+        fdv = pair.get("fdv")
+        mcap = _safe_float(fdv, 0.0) if fdv else None
     if mcap == 0:
         mcap = None
     created = pair.get("pairCreatedAt") or pair.get("pairCreationTime")
@@ -103,6 +137,23 @@ async def fetch_token_data(token_address: str) -> Optional[TokenData]:
         dex_name = dex_name
     else:
         dex_name = None
+    decimals = None
+    try:
+        d = base.get("decimals")
+        if d is not None:
+            decimals = int(d)
+    except (TypeError, ValueError):
+        pass
+    pair_address = pair.get("pairAddress") or pair.get("address") or None
+    await set_token_cache(
+        token_address=ca,
+        token_name=base.get("name"),
+        symbol=base.get("symbol"),
+        decimals=decimals,
+        chain=chain,
+        pair_address=pair_address,
+        price=price,
+    )
     return TokenData(
         token_address=ca,
         name=base.get("name") or "Unknown",
@@ -115,4 +166,6 @@ async def fetch_token_data(token_address: str) -> Optional[TokenData]:
         age=age,
         chart_url=chart_url,
         dex_name=dex_name,
+        volume_24h=volume_24h,
+        decimals=decimals,
     )

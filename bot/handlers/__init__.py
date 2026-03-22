@@ -5,11 +5,18 @@ from .guide import router as guide_router
 from .feedback import router as feedback_router
 from .admin_feedback import router as admin_feedback_router
 from .admin_analytics import router as admin_analytics_router
+from .admin_announcement import router as admin_announcement_router
+from .settings import router as settings_router
 from .token import router as token_router
 from .open_position import router as open_position_router
 from .close_position import router as close_position_router
 from .stats import router as stats_router
 from .misc import router as misc_router
+from .journal import router as journal_router
+from .premium import router as premium_router
+from .payment import router as payment_router
+from .support import router as support_router
+from .referral import router as referral_router
 
 
 def setup_routers() -> Router:
@@ -17,9 +24,16 @@ def setup_routers() -> Router:
     root.include_router(start_router)
     root.include_router(guide_router)
     root.include_router(stats_router)
+    root.include_router(premium_router)
+    root.include_router(payment_router)
+    root.include_router(support_router)
+    root.include_router(referral_router)
+    root.include_router(journal_router)  # Journal before settings to handle journal menu
     root.include_router(feedback_router)
     root.include_router(admin_feedback_router)
     root.include_router(admin_analytics_router)
+    root.include_router(admin_announcement_router)
+    root.include_router(settings_router)  # before token so ConnectWallet address is not treated as CA
     root.include_router(open_position_router)
     root.include_router(close_position_router)
     root.include_router(misc_router)

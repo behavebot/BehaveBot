@@ -4,6 +4,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from config import ADMIN_IDS
+from bot.keyboards.inline import BACK_TO_MENU_DATA
 from bot.database.db import (
     get_analytics_user_activity,
     get_analytics_trade_stats,
@@ -23,7 +24,7 @@ def kb_track_behaviour_menu() -> InlineKeyboardMarkup:
     b.row(InlineKeyboardButton(text="📈 Trade Stats", callback_data="admin_trade_stats"))
     b.row(InlineKeyboardButton(text="🧠 Psychology Stats", callback_data="admin_psychology_stats"))
     b.row(InlineKeyboardButton(text="📊 Engagement Stats", callback_data="admin_engagement_stats"))
-    b.row(InlineKeyboardButton(text="🔙 Back to Admin", callback_data=BACK_TO_ADMIN_DATA))
+    b.row(InlineKeyboardButton(text="⬅️ Back to Menu", callback_data=BACK_TO_MENU_DATA))
     return b.as_markup()
 
 
@@ -110,8 +111,10 @@ async def admin_analytics_back(callback: CallbackQuery) -> None:
         await callback.answer()
         return
     from bot.keyboards import kb_admin_panel
+    from bot.database.db import get_user_premium_status_fresh
     await callback.answer()
+    st = await get_user_premium_status_fresh(callback.from_user.id)
     await callback.message.edit_text(
         "🛠 Admin Panel\n\nChoose an action:",
-        reply_markup=kb_admin_panel(),
+        reply_markup=kb_admin_panel(bool(st.get("is_premium"))),
     )

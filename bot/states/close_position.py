@@ -7,3 +7,6 @@ class ClosePositionStates(StatesGroup):
     reason = State()
     reason_note = State()
     discipline = State()
+    # Auto-close flow (trade_id in state data)
+    auto_emotion_note = State()
+    auto_reason_note = State()
